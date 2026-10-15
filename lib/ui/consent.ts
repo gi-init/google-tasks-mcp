@@ -33,7 +33,7 @@ export function consentPage(options: ConsentPageOptions): string {
 <li>${checkMark("xs")}<span>Add, change and delete your tasks, and add task lists</span></li>
 </ul>
 </section>
-<p class="help">Next, Google asks you to sign in. Leave the Google Tasks box ticked.</p>
+<p class="help">Next, Google asks you to sign in. If it says it hasn't verified the app, choose Advanced, then the Go to link. Leave the Google Tasks box ticked.</p>
 <form method="post" action="${options.action}">
 <input type="hidden" name="request" value="${options.request}">
 <div class="actions">
