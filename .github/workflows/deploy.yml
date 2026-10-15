@@ -6,7 +6,9 @@
 # project's environment variables and never pass through GitHub.
 #
 # Set under the repository's Settings, Secrets and variables, Actions:
-#   secret    VERCEL_TOKEN       a token from https://vercel.com/account/settings/tokens
+#   secret    VERCEL_TOKEN       a token from https://vercel.com/account/settings/tokens. Best kept as a
+#                                secret of the production environment, limited to main, so no other
+#                                branch's workflow can read it. A repository secret also works.
 #   variable  VERCEL_ORG_ID      "orgId" in .vercel/project.json
 #   variable  VERCEL_PROJECT_ID  "projectId" in .vercel/project.json
 #   variable  PUBLIC_URL         optional, such as https://tasks.example.com; turns on the check after the deploy
@@ -37,6 +39,7 @@ jobs:
   deploy:
     name: Deploy to Vercel
     needs: ci
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -54,7 +57,7 @@ jobs:
           fi
           need() { # need <name> <secret|variable>
             if [ -z "${!1}" ]; then
-              echo "::error::The repository $2 $1 is not set. Add it under Settings, Secrets and variables, Actions. The README's setup section says where each value comes from."
+              echo "::error::The $2 $1 is not set. Add it under Settings, Secrets and variables, Actions, or as a secret of the production environment. The README's setup section says where each value comes from."
               problems=1
             fi
           }
@@ -69,8 +72,9 @@ jobs:
         with:
           node-version: 22
 
+      # An exact version, because this step runs with the Vercel token. Bump it by hand.
       - name: Install the Vercel CLI
-        run: npm install --global vercel@64
+        run: npm install --global vercel@64.2.0
 
       # The CLI prints the new deployment's own URL on stdout and its progress on stderr.
       - name: Deploy to production

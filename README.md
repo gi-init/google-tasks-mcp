@@ -73,6 +73,8 @@ gh variable set VERCEL_ORG_ID --body "$(node -p "require('./.vercel/project.json
 gh variable set VERCEL_PROJECT_ID --body "$(node -p "require('./.vercel/project.json').projectId")"
 ```
 
+The deploy job runs in a GitHub environment called `production`. To keep the token away from workflows on any other branch, store it there instead. Under Settings, Environments, create `production`, limit its deployment branches to `main`, add `VERCEL_TOKEN` as an environment secret, and delete the repository secret.
+
 Optionally, set the variable `PUBLIC_URL` to `https://YOUR-DOMAIN`. After each deploy the workflow then checks that the server answers there, and prints the connector URL on the run's summary page.
 
 ```bash

@@ -1,0 +1,15 @@
+# Weekly pull requests for outdated npm packages and GitHub Actions. Security fixes come sooner,
+# when Dependabot security updates are turned on in the repository's settings.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
