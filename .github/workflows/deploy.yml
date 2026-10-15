@@ -6,7 +6,9 @@
 # project's environment variables and never pass through GitHub.
 #
 # Set under the repository's Settings, Secrets and variables, Actions:
-#   secret    VERCEL_TOKEN       a token from https://vercel.com/account/settings/tokens
+#   secret    VERCEL_TOKEN       a token from https://vercel.com/account/settings/tokens. Best kept as a
+#                                secret of the production environment, limited to main, so no other
+#                                branch's workflow can read it. A repository secret also works.
 #   variable  VERCEL_ORG_ID      "orgId" in .vercel/project.json
 #   variable  VERCEL_PROJECT_ID  "projectId" in .vercel/project.json
 #   variable  PUBLIC_URL         optional, such as https://tasks.example.com; turns on the check after the deploy
@@ -37,15 +39,18 @@ jobs:
   deploy:
     name: Deploy to Vercel
     needs: ci
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The token is given only to the steps that need it, so the npm install below never sees it.
     env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
     steps:
       # A manual run can be started on any branch, and this deploys to production.
       - name: Check the branch and the settings
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           problems=0
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
@@ -54,7 +59,7 @@ jobs:
           fi
           need() { # need <name> <secret|variable>
             if [ -z "${!1}" ]; then
-              echo "::error::The repository $2 $1 is not set. Add it under Settings, Secrets and variables, Actions. The README's setup section says where each value comes from."
+              echo "::error::The $2 $1 is not set. Add it under Settings, Secrets and variables, Actions, or as a secret of the production environment. The README's setup section says where each value comes from."
               problems=1
             fi
           }
@@ -63,18 +68,23 @@ jobs:
           need VERCEL_PROJECT_ID variable
           exit "$problems"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
 
+      # An exact version, because this step runs with the Vercel token. Bump it by hand.
       - name: Install the Vercel CLI
-        run: npm install --global vercel@64
+        run: npm install --global vercel@64.2.0
 
       # The CLI prints the new deployment's own URL on stdout and its progress on stderr.
       - name: Deploy to production
         id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           vercel deploy --prod --yes --token "$VERCEL_TOKEN" > "$RUNNER_TEMP/deployment-url.txt"
           url="$(grep -oE 'https://[^[:space:]]+' "$RUNNER_TEMP/deployment-url.txt" | tail -n 1 || true)"
