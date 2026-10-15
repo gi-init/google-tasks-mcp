@@ -20,6 +20,7 @@ export const STYLES = trusted(`
   --rule: rgba(242, 236, 218, 0.12);
   --frame: rgba(242, 236, 218, 0.14);
   --field-fill: rgba(242, 236, 218, 0.03);
+  --field-solid: #201e19; /* --field-fill over --bg, as one opaque color */
   --display: "Fraunces", Georgia, "Times New Roman", serif;
   --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -303,10 +304,18 @@ button:focus-visible {
   margin-top: 36px;
 }
 
-.value {
-  padding: 14px 16px;
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
   border: 1px solid var(--frame);
   background: var(--field-fill);
+}
+
+.value {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
   font-family: var(--mono);
   font-size: 15px;
   line-height: 1.5;
@@ -316,8 +325,88 @@ button:focus-visible {
   user-select: all;
 }
 
-.stack > .value + .help {
+.stack > .field + .help {
   margin-top: 12px;
+}
+
+/* The copy button sits at the end of the field. After a copy, its icon gives
+   way to a drawn check and "Copied to clipboard". The label is laid over the
+   end of the field, fading in from the left, so a long URL doesn't reflow. */
+.copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--fg-60);
+  font-family: var(--sans);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: color var(--motion-swap);
+}
+
+.copy[hidden] {
+  display: none;
+}
+
+.copy-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.copy-done {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 0 40px;
+  background: linear-gradient(to right, transparent, var(--field-solid) 32px);
+  color: var(--sage);
+}
+
+.copy-done .check-xs {
+  margin-top: 0;
+}
+
+.copy.is-copied .copy-icon {
+  visibility: hidden;
+}
+
+.copy.is-copied .copy-done {
+  display: inline-flex;
+}
+
+.copy .check path {
+  animation-delay: 0s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .copy:hover {
+    color: var(--fg);
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .help {

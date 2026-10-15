@@ -5,6 +5,8 @@ export type HtmlResponseOptions = {
   headers?: HeadersInit;
   /** Extra origins a form on this page may submit to or be redirected to (CSP form-action). */
   formActionOrigins?: string[];
+  /** Hashes of the inline scripts this page may run, such as "sha256-...". Without any, no script runs. */
+  scriptHashes?: string[];
 };
 
 // A scheme ("myapp:") or an http(s) origin with an optional port. Anything
@@ -20,9 +22,14 @@ export function formActionSources(origins: string[] = []): string[] {
   return sources;
 }
 
-export function contentSecurityPolicy(formActionOrigins: string[] = []): string {
+// A base64 SHA-256 digest is 43 characters and one "=".
+const SCRIPT_HASH = /^sha256-[A-Za-z0-9+/]{43}=$/;
+
+export function contentSecurityPolicy(formActionOrigins: string[] = [], scriptHashes: string[] = []): string {
+  const scripts = scriptHashes.filter((hash) => SCRIPT_HASH.test(hash)).map((hash) => `'${hash}'`);
   return [
     "default-src 'none'",
+    ...(scripts.length > 0 ? [`script-src ${scripts.join(" ")}`] : []),
     "style-src 'unsafe-inline' https://fonts.googleapis.com",
     "font-src https://fonts.gstatic.com",
     "img-src 'self' data:",
@@ -41,7 +48,7 @@ export function contentSecurityPolicy(formActionOrigins: string[] = []): string 
 export function htmlResponse(html: string, options: HtmlResponseOptions = {}): Response {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "text/html; charset=utf-8");
-  headers.set("Content-Security-Policy", contentSecurityPolicy(options.formActionOrigins));
+  headers.set("Content-Security-Policy", contentSecurityPolicy(options.formActionOrigins, options.scriptHashes));
   headers.set("X-Frame-Options", "DENY");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("X-Content-Type-Options", "nosniff");

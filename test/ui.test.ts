@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { GET } from "@/app/route";
-import { consentPage, errorPage, htmlResponse, landingPage, privacyPage } from "@/lib/ui";
+import { COPY_SCRIPT_HASH, consentPage, errorPage, htmlResponse, landingPage, privacyPage } from "@/lib/ui";
+import { COPY_SCRIPT } from "@/lib/ui/copy";
 import { escapeHtml } from "@/lib/ui/html";
 
 const NASTY = `<script>alert("x")</script> & 'quoted'`;
@@ -19,6 +21,12 @@ function csp(res: Response): Record<string, string> {
 /** The page as plain text: no markup, line-break hints removed. */
 function withoutWbr(page: string): string {
   return page.replaceAll("<wbr>", "");
+}
+
+/** The home page with its one copy script taken out, which must be there exactly once. */
+function withoutCopyScript(page: string): string {
+  expect(page.split(COPY_SCRIPT.value)).toHaveLength(2);
+  return page.replace(COPY_SCRIPT.value, "");
 }
 
 function expectNoScript(page: string) {
@@ -88,6 +96,19 @@ describe("htmlResponse", () => {
     expect(csp(res)["form-action"]).toBe("'self' https://accounts.google.com https://claude.ai http://localhost:33418 cursor:");
   });
 
+  it("allows the inline scripts it is given by hash, and no others", () => {
+    const hash = `sha256-${"A".repeat(43)}=`;
+    const res = htmlResponse("x", {
+      scriptHashes: [hash, "'unsafe-inline'", "*", `${hash}; script-src *`, "sha256-short=", "https://evil.example"],
+    });
+    expect(csp(res)["script-src"]).toBe(`'${hash}'`);
+    expect(csp(res)["default-src"]).toBe("'none'");
+  });
+
+  it("leaves script-src out when no hash is usable, so default-src 'none' blocks every script", () => {
+    expect(csp(htmlResponse("x", { scriptHashes: ["'unsafe-inline'"] }))["script-src"]).toBeUndefined();
+  });
+
   it("leaves out form-action values that could change the policy", () => {
     const res = htmlResponse("x", {
       formActionOrigins: [
@@ -147,13 +168,30 @@ describe("landingPage", () => {
 
   it("escapes the origin and the setting names", () => {
     const page = landingPage({ origin: `https://x.example${NASTY}`, missing: [NASTY] });
-    expectNoScript(page);
+    expectNoScript(withoutCopyScript(page));
     expect(page).toContain(NASTY_ESCAPED);
     expect(page).toContain(`<code>${NASTY_ESCAPED}</code>`);
   });
 
-  it("uses no JavaScript", () => {
-    expectNoScript(landingPage({ origin: "https://tasks.example.com", missing: ["GOOGLE_CLIENT_ID"] }));
+  it("runs no JavaScript but the copy script", () => {
+    expectNoScript(withoutCopyScript(landingPage({ origin: "https://tasks.example.com", missing: ["GOOGLE_CLIENT_ID"] })));
+  });
+
+  it("has a hidden copy button for each URL, which the script shows", () => {
+    const page = landingPage({ origin: "https://tasks.example.com", missing: [] });
+    expect(page).toContain(
+      '<button class="copy" type="button" data-copy="https://tasks.example.com/mcp" aria-label="Copy the connector URL" hidden>',
+    );
+    expect(page).toContain(
+      '<button class="copy" type="button" data-copy="https://tasks.example.com/oauth/google/callback" aria-label="Copy the Google redirect URI" hidden>',
+    );
+    expect(page.match(/<span class="sr-only" role="status"><\/span>/g)).toHaveLength(2);
+    expect(page).toContain("Copied to clipboard");
+  });
+
+  it("escapes the URL it copies", () => {
+    const page = landingPage({ origin: `https://x.example${NASTY}`, missing: [] });
+    expect(page).toContain(`data-copy="https://x.example${NASTY_ESCAPED}/mcp"`);
   });
 });
 
@@ -241,6 +279,13 @@ describe("GET /", () => {
     expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
     const page = withoutWbr(await res.text());
+    // The page's one script must be exactly what the CSP hash allows.
+    expect(page.match(/<script/gi)).toHaveLength(1);
+    const start = page.indexOf("<script>") + "<script>".length;
+    const script = page.slice(start, page.indexOf("</script>", start));
+    expect(script).toContain("navigator.clipboard.writeText");
+    expect(csp(res)["script-src"]).toBe(`'sha256-${createHash("sha256").update(script).digest("base64")}'`);
+    expect(csp(res)["script-src"]).toBe(`'${COPY_SCRIPT_HASH}'`);
     expect(page).toContain("https://tasks.example.com/mcp");
     expect(page).toContain("https://tasks.example.com/oauth/google/callback");
     expect(page).toContain("Ready");

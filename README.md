@@ -86,8 +86,10 @@ Every push to `main` runs the checks and then deploys. To deploy without a new c
 ### 4. Claude
 
 1. In Claude, open Customize, then Connectors, and choose Add custom connector.
-2. Paste `https://YOUR-DOMAIN/mcp` as the URL. Keep the default OAuth settings and leave the client ID and secret empty, then choose Add.
-3. Choose Connect. The server's page shows the address it will send you back to. Choose Continue with Google, sign in, and leave the Google Tasks box ticked.
+2. Give it a name, such as Google Tasks, and paste `https://YOUR-DOMAIN/mcp` as the server URL.
+3. Under Authentication, keep Sign in now. Under OAuth client, keep Use Claude's published identity. Claude marks both Detected. Leave Request headers empty and choose Add. If your dialog shows Advanced settings instead of these choices, leave the OAuth client ID and secret empty.
+4. Choose Connect. The server's page shows the address it will send you back to. Choose Continue with Google.
+5. Sign in with Google. If Google says it hasn't verified the app, choose Advanced, then the Go to link. Leave the Google Tasks box ticked and choose Continue.
 
 ## Settings
 
