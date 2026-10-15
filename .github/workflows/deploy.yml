@@ -1,0 +1,151 @@
+# Deploys main to production on Vercel. Runs on every push to main, and by hand from
+# Actions, Deploy, Run workflow. CI runs first, so a commit deploys only if it passes.
+#
+# The Vercel project is not connected to Git. This workflow uploads the source with the Vercel CLI
+# and Vercel builds it. The server's own settings (GOOGLE_CLIENT_ID and the rest) are the Vercel
+# project's environment variables and never pass through GitHub.
+#
+# Set under the repository's Settings, Secrets and variables, Actions:
+#   secret    VERCEL_TOKEN       a token from https://vercel.com/account/settings/tokens
+#   variable  VERCEL_ORG_ID      "orgId" in .vercel/project.json
+#   variable  VERCEL_PROJECT_ID  "projectId" in .vercel/project.json
+#   variable  PUBLIC_URL         optional, such as https://tasks.example.com; turns on the check after the deploy
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time. A deploy that has started is never cancelled halfway; the next one waits.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash # with pipefail, which the default shell leaves off
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to Vercel
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      # A manual run can be started on any branch, and this deploys to production.
+      - name: Check the branch and the settings
+        run: |
+          problems=0
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Production deploys from main only. This run is on $GITHUB_REF."
+            problems=1
+          fi
+          need() { # need <name> <secret|variable>
+            if [ -z "${!1}" ]; then
+              echo "::error::The repository $2 $1 is not set. Add it under Settings, Secrets and variables, Actions. The README's setup section says where each value comes from."
+              problems=1
+            fi
+          }
+          need VERCEL_TOKEN secret
+          need VERCEL_ORG_ID variable
+          need VERCEL_PROJECT_ID variable
+          exit "$problems"
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install the Vercel CLI
+        run: npm install --global vercel@64
+
+      # The CLI prints the new deployment's own URL on stdout and its progress on stderr.
+      - name: Deploy to production
+        id: deploy
+        run: |
+          vercel deploy --prod --yes --token "$VERCEL_TOKEN" > "$RUNNER_TEMP/deployment-url.txt"
+          url="$(grep -oE 'https://[^[:space:]]+' "$RUNNER_TEMP/deployment-url.txt" | tail -n 1 || true)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployment: ${url:-not reported}"
+
+      # Checks the production domain rather than the deployment's own URL, which Vercel puts behind
+      # its sign-in. The domain is also what Claude connects to. Retries because the domain can take
+      # a few seconds to move to the new deployment.
+      - name: Check the production domain
+        if: ${{ vars.PUBLIC_URL != '' }}
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: |
+          base="${PUBLIC_URL%/}"
+          metadata_url="$base/.well-known/oauth-protected-resource/mcp"
+          work="$RUNNER_TEMP/smoke"
+          mkdir -p "$work"
+
+          metadata_ok() {
+            rm -f "$work/metadata.json"
+            status="$(curl --silent --max-time 20 --output "$work/metadata.json" --write-out '%{http_code}' "$metadata_url")" || status="no answer"
+            resource="$(jq -r '.resource // empty' "$work/metadata.json" 2>/dev/null || true)"
+            echo "GET $metadata_url: $status, resource ${resource:-missing} (expected 200 and $base/mcp)"
+            [ "$status" = "200" ] && [ "$resource" = "$base/mcp" ]
+          }
+
+          challenge_ok() {
+            rm -f "$work/mcp-headers.txt"
+            status="$(curl --silent --max-time 20 --request POST \
+              --header "Content-Type: application/json" \
+              --header "Accept: application/json, text/event-stream" \
+              --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' \
+              --dump-header "$work/mcp-headers.txt" --output /dev/null --write-out '%{http_code}' \
+              "$base/mcp")" || status="no answer"
+            challenge="$(grep -i '^www-authenticate:' "$work/mcp-headers.txt" 2>/dev/null | tr -d '\r' || true)"
+            echo "POST $base/mcp without a token: $status, ${challenge:-no WWW-Authenticate header} (expected 401 and resource_metadata=\"$metadata_url\")"
+            [ "$status" = "401" ] && [[ "$challenge" == *"resource_metadata=\"$metadata_url\""* ]]
+          }
+
+          attempts=10
+          for attempt in $(seq 1 "$attempts"); do
+            if metadata_ok && challenge_ok; then
+              echo "$base answers as expected."
+              exit 0
+            fi
+            if [ "$attempt" -lt "$attempts" ]; then
+              echo "Attempt $attempt of $attempts did not pass. Trying again in 10 seconds."
+              sleep 10
+            fi
+          done
+          echo "::error::$base does not answer the way the MCP server should. Check the deployment's logs on Vercel, that PUBLIC_URL is the production domain, and that Vercel's Deployment Protection doesn't cover that domain."
+          exit 1
+
+      - name: Write the summary
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          {
+            echo "## Deployed"
+            echo
+            echo "Commit: \`$GITHUB_SHA\`"
+            if [ -n "$DEPLOYMENT_URL" ]; then
+              echo
+              echo "Deployment: $DEPLOYMENT_URL"
+            fi
+            echo
+            if [ -n "$PUBLIC_URL" ]; then
+              echo "Connector URL for Claude: \`${PUBLIC_URL%/}/mcp\`"
+            else
+              echo "The connector URL for Claude is your production domain followed by \`/mcp\`. Set the repository variable PUBLIC_URL to have this run check that domain and print the URL here."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
