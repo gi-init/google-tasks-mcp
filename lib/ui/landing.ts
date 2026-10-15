@@ -1,4 +1,5 @@
 import { googleCallbackUrl, resourceUrl } from "@/lib/config";
+import { COPY_SCRIPT, copyField } from "@/lib/ui/copy";
 import { html, type Html } from "@/lib/ui/html";
 import { checkMark, documentHtml, footer } from "@/lib/ui/layout";
 
@@ -8,14 +9,6 @@ export type LandingPageOptions = {
   /** Names of settings that still need values, e.g. ["GOOGLE_CLIENT_ID"]. Empty when set up. */
   missing: string[];
 };
-
-/** Lets a long URL wrap after a slash in its path instead of in the middle of a word. */
-function breakableUrl(url: string): Html {
-  const pathStart = url.indexOf("/", url.indexOf("//") + 2);
-  if (pathStart === -1) return html`${url}`;
-  const segments = url.slice(pathStart + 1).split("/");
-  return html`${url.slice(0, pathStart)}${segments.map((segment) => html`/<wbr>${segment}`)}`;
-}
 
 function setupStatus(missing: string[]): Html {
   if (missing.length === 0) {
@@ -29,7 +22,10 @@ ${missing.map((name) => html`<li><code>${name}</code></li>\n`)}</ul>
 <p class="help">Add them as environment variables in your Vercel project, under Settings, then redeploy.</p>`;
 }
 
-/** GET / : what this is, the connector URL to paste into Claude, the Google redirect URI, and setup status. */
+/**
+ * GET / : what this is, the connector URL to paste into Claude, the Google redirect URI, and setup
+ * status. Its response needs COPY_SCRIPT_HASH in the CSP for the copy buttons to work.
+ */
 export function landingPage(options: LandingPageOptions): string {
   const body = html`<main>
 <section class="hero">
@@ -41,7 +37,7 @@ export function landingPage(options: LandingPageOptions): string {
 <section class="block" aria-labelledby="connector-url">
 <h2 class="subhead" id="connector-url">Connector URL</h2>
 <div class="stack">
-<p class="value">${breakableUrl(resourceUrl(options.origin))}</p>
+${copyField(resourceUrl(options.origin), "Copy the connector URL")}
 <p class="help">Paste this into Claude when you add the connector.</p>
 </div>
 </section>
@@ -51,7 +47,7 @@ export function landingPage(options: LandingPageOptions): string {
 <div class="stack">
 ${setupStatus(options.missing)}
 <h3 class="eyebrow">Google redirect URI</h3>
-<p class="value">${breakableUrl(googleCallbackUrl(options.origin))}</p>
+${copyField(googleCallbackUrl(options.origin), "Copy the Google redirect URI")}
 <p class="help">Add this under Authorized redirect URIs on your Google OAuth client.</p>
 </div>
 </section>
@@ -70,7 +66,8 @@ ${setupStatus(options.missing)}
 </div>
 </section>
 </main>
-${footer()}`;
+${footer()}
+${COPY_SCRIPT}`;
 
   return documentHtml({
     description: "A Google Tasks connector for Claude.",
