@@ -279,7 +279,10 @@ describe("GET /", () => {
     expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
     const page = withoutWbr(await res.text());
-    const script = page.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? "";
+    // The page's one script must be exactly what the CSP hash allows.
+    expect(page.match(/<script/gi)).toHaveLength(1);
+    const start = page.indexOf("<script>") + "<script>".length;
+    const script = page.slice(start, page.indexOf("</script>", start));
     expect(script).toContain("navigator.clipboard.writeText");
     expect(csp(res)["script-src"]).toBe(`'sha256-${createHash("sha256").update(script).digest("base64")}'`);
     expect(csp(res)["script-src"]).toBe(`'${COPY_SCRIPT_HASH}'`);
