@@ -1,0 +1,37 @@
+{
+  "name": "google-tasks-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A Google Tasks connector for Claude. It's a remote MCP server you deploy to your own Vercel account.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.3.1",
+    "jose": "^6.2.12",
+    "mcp-handler": "^2.3.0",
+    "next": "^16.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.12"
+  }
+}
