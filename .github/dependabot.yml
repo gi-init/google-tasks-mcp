@@ -6,9 +6,24 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Minor and patch updates come together in one pull request. A major update comes on its own,
+    # so one that breaks the build doesn't hold back the rest.
     groups:
       npm:
         patterns: ["*"]
+        update-types: [minor, patch]
+    # Held back until the packages that depend on them catch up. Remove a line when its reason no
+    # longer holds.
+    ignore:
+      # typescript-eslint, which eslint-config-next uses, supports TypeScript below 6.1.
+      - dependency-name: typescript
+        versions: [">=6.1"]
+      # eslint-plugin-react, eslint-plugin-import and eslint-plugin-jsx-a11y support ESLint 9 at most.
+      - dependency-name: eslint
+        versions: [">=10"]
+      # The types match the Node version the server runs on, 22 (engines in package.json).
+      - dependency-name: "@types/node"
+        versions: [">=23"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
