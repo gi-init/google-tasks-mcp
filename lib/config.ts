@@ -1,8 +1,8 @@
 import { hkdfSync } from "node:crypto";
 import { getPublicOrigin } from "mcp-handler";
 
-/** The Google scope the server asks for. Read and write access to Google Tasks. */
-export const GOOGLE_TASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
+/** The Google scope the server asks for. Read-only access to Google Tasks. */
+export const GOOGLE_TASKS_SCOPE = "https://www.googleapis.com/auth/tasks.readonly";
 
 /** The one scope this server grants to MCP clients. */
 export const MCP_SCOPE = "tasks";
